@@ -74,7 +74,7 @@ class MongoDB
         if (!isset($this->collections[$name])) {
             $this->collections[$name] = new MongoCollection($this, $name);
         }
-        
+
         return $this->collections[$name];
     }
 
@@ -92,7 +92,7 @@ class MongoDB
     public function drop()
     {
         $cmd = ['dropDatabase' => 1];
-        
+
         return $this->command($cmd);
     }
 
@@ -101,9 +101,9 @@ class MongoDB
      *
      * @param array $command - The query to send.
      * @param array $options - This parameter is an associative array of
-     *   the form array("optionname" => boolean, ...). 
+     *   the form array("optionname" => boolean, ...).
      *
-     * @return array - Returns database response. 
+     * @return array - Returns database response.
      */
     public function command(array $cmd, array $options = [])
     {
@@ -113,8 +113,8 @@ class MongoDB
         }
 
         $response = $this->protocol->opQuery(
-            "{$this->name}.\$cmd", 
-            $cmd, 
+            "{$this->name}.\$cmd",
+            $cmd,
             0, -1, 0,
             $timeout
         );
@@ -136,7 +136,7 @@ class MongoDB
         $namespaces = $this->selectCollection(self::NAMESPACES_COLLECTION);
         foreach ($namespaces->find() as $collection) {
             if (
-                !$includeSystemCollections && 
+                !$includeSystemCollections &&
                 $this->isSystemCollection($collection['name'])
             ) {
                 continue;
@@ -219,7 +219,30 @@ class MongoDB
      */
     public function authenticate($username, $password)
     {
-        throw new Exception('Not Implemented');
+        // throw new Exception('Not Implemented');
+        $timeout = MongoCursor::$timeout;
+        if (!empty($options['timeout'])) {
+            $timeout = $options['timeout'];
+        }
+
+        $response = $this->command(['getnonce' => 1]);
+        if (!idx($response, 'nonce')) {
+            throw new Exception('Cannot get nonce');
+            return false;
+        }
+
+        $nonce = $response['nonce'];
+
+        $password_digest = md5(sprintf('%s:mongo:%s', $username, $password));
+        $digest = md5(sprintf('%s%s%s', $nonce, $username, $password_digest));
+        $auth_response = $this->command([
+            'authenticate' => 1,
+            'user' => $username,
+            'nonce' => $nonce,
+            'key' => $digest
+        ]);
+
+        return $auth_response;
     }
 
     /**
